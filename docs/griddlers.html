@@ -1,0 +1,463 @@
+<html>
+	<head>
+		<title>Griddlers</title>
+	</head>
+	<body>
+        <table>
+            <tr>
+                <td>
+                    Problem:
+                </td>
+                <td>
+                    <select id="fldProblem"></select>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    Animation Delay:
+                </td>
+                <td>
+                    <input id="fldAnimationDelayValue" type="number" step="1" min="0" max="1000"></input>
+    		        <input id="fldAnimationDelayRange" type="range" step="1" min="0" max="1000"></input> 
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    Grid Cell Size:
+                </td>
+                <td>
+                    <input id="fldCellSizeValue" type="number" step="1" min="0" max="1000"></input>
+    		        <input id="fldCellSizeRange" type="range" step="1" min="0" max="50"></input> 
+                </td>
+            </tr>
+        </table>
+    	<button id="btnSolve">Solve</button>
+		<button id="btnReset">Reset</button>
+        <br />
+		<div id="divMain"></div>
+        <br />
+        <h3>Info</h3>
+        <ul>
+            <li>
+                The grid is responsive - you can try solve the puzzle by yourself. 
+                Left-click a cell to change its state. 
+                Each cell have 3 states: <i>UNKNOWN</i>, <i>EMPTY</i>, <i>FILLED</i>.
+                All cells start from the <i>UNKNOWN</i> state.
+            </li>
+            <li>
+                The solution is animated. 
+                In each step the color of a cell is determained according to the probability it is <i>FILLED</i> or <i>EMPTY</i>.
+                As a cell gets darker as the probability for it to be <i>FILLED</i> increases.
+            </li>
+            <li>
+                The initiation step in the beginning of the solution is the heavy part.
+                Since the work is done in the browser it might get not responsive for a few seconds.
+                After the initiation step is done, the animation begins.
+                (The initiation step is when all the possible states for the different rows and columns are calculated)
+            </li>
+        </ul>
+	</body>
+	<!-- Scripts -->
+	<script type="text/javascript" src="Problem.js"></script>
+	<script type="text/javascript" src="Grid.js"></script>
+	<script type="text/javascript" src="Solver.js"></script>
+	<script type="text/javascript" src="GriddlerViewer.js"></script>
+	<script type="text/javascript">
+		var solver = new Solver();
+		var viewer = new GriddlerViewer();
+		var prevProgress = 0;
+		var interval = 1;
+		var animationDelay = 70;
+		var cellSize = 20;
+		var solution;
+		var problems = [];
+		var divMain = document.getElementById("divMain");
+		var fldProblem = document.getElementById("fldProblem");
+		var btnSolve = document.getElementById("btnSolve");
+		var btnReset = document.getElementById("btnReset");
+		var fldAnimationDelayValue = document.getElementById("fldAnimationDelayValue");
+		var fldAnimationDelayRange = document.getElementById("fldAnimationDelayRange");
+		var fldCellSizeValue = document.getElementById("fldCellSizeValue");
+		var fldCellSizeRange = document.getElementById("fldCellSizeRange");
+
+		btnSolve.onclick = function() {
+			iterativeSolution(animationDelay);
+		}
+		btnReset.onclick = function() {
+			init();
+		}
+		// Animation Delay
+		fldAnimationDelayValue.value = animationDelay;
+		fldAnimationDelayValue.onchange = function() {
+			animationDelay = fldAnimationDelayValue.value;
+			fldAnimationDelayRange.value = animationDelay;
+		}
+		fldAnimationDelayRange.value = animationDelay;
+		fldAnimationDelayRange.onchange = function() {
+			animationDelay = fldAnimationDelayRange.value;
+			fldAnimationDelayValue.value = animationDelay;
+		}
+		// Cell Size
+		fldCellSizeValue.value = cellSize;
+		fldCellSizeValue.onchange = function() {
+			cellSize = fldCellSizeValue.value;
+			fldCellSizeRange.value = cellSize;
+			var grid = (solution !== undefined) ? solution.grid : new Grid(p.getRowCount(), p.getColumnCount());
+			updateGridViewer(grid);
+		}
+		fldCellSizeRange.value = cellSize;
+		fldCellSizeRange.onchange = function() {
+			cellSize = fldCellSizeRange.value;
+			fldCellSizeValue.value = cellSize;
+			var grid = (solution !== undefined) ? solution.grid : new Grid(p.getRowCount(), p.getColumnCount());
+			updateGridViewer(grid);
+		}
+		// addProblemOption(new Problem( // <fill-me>
+		//  	20, 20,
+		//  	// Rows
+		//  	[
+		//  		[], [], [], [], [],
+		//  		[], [], [], [], [],
+		//  		[], [], [], [], [],
+		//  		[], [], [], [], []
+		//  	],
+		//  	// Columns
+		//  	[
+		//  		[], [], [], [], [],
+		//  		[], [], [], [], [],
+		//  		[], [], [], [], [],
+		//  		[], [], [], [], []
+		//  	]
+		//  ), "<fill-me>");
+		addProblemOption(new Problem( // Koala
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[2,10,1], [1,7,3,1], [1,1,2,1], [1,2,1], [1,1,3],
+		 		[2,1], [5,2,1,1,2], [2,1,3,1,2], [2,3,2,1], [5,4,2,1],
+		 		[2,2,1,1,2,2], [2,4,4], [1,6,1], [1,3,2,2], [3,3],
+		 		[4,1], [1,2,2], [2,2,1], [8], [2,1]
+		 	],
+		 	// Columns
+		 	[
+		 		[7,3], [1,3,2], [2,2,2], [2,1,1], [2,4],
+		 		[2,2,1], [2,2,1], [2,1,1], [2,1,1], [1,3,2],
+		 		[1,1,1,2,2], [1,4,3,3], [2,5,2,2], [1,3,3,1], [2,1,2,1,1],
+		 		[2,2,2,1], [2,6,1,3], [1,2,1,1,2], [6,1,2,1,1], [2,5,6]
+		 	]
+		 ), "Koala");
+		addProblemOption(new Problem( // Cat Behind Garbage Can
+		 	30, 25,
+		 	// Rows
+		 	[
+		 		[6], [1,3], [12,1], [1,7], [3,5],
+		 		[6,1], [16,1], [1,1,1,9], [1,1,2,1,1,1], [1,1,1,1,1,1],
+		 		[1,1,1,1,1,1], [1,2,1,1,1,1], [1,1,1,1,1,1], [1,1,1,1,1,1], [1,1,1,3,3,2,1],
+		 		[2,2,1,1,1,1,1,1,2], [5,1,1,4,1,1,1], [6,1,1,1,1,1], [2,1,1,1,8,1,2], [6,1,1,1,2,2],
+		 		[6,1,1,1,1,2], [5,2,1,1,1,1], [1,1,1,1,1,1], [1,1,1,1,1,2], [1,1,1,1,1,1],
+		 		[1,1,1,1,1,1,1,1,1,1], [1,2,3,2,2,1], [2,1], [5,9], [16]
+		 	],
+		 	// Columns
+		 	[
+		 		[4], [8], [3,3], [2,6], [1,1,4,3,3,4],
+		 		[1,1,1,14,2], [1,2,2], [1,7,5,2], [1,2,11,1,2], [1,2,2,2],
+		 		[2,2,5,1], [1,1,2,7,8,1], [1,1,3,3,1,1,1], [1,2,1,1,1,1,1], [1,2,1,1,1,2,1],
+		 		[1,2,1,3,1,1], [2,1,9,8,2], [1,1,2,5,1,2], [3,2,2,2], [2,2,6,2],
+		 		[1,8,7,2], [1,1,1,2], [1,1,2,1], [1,1,9,1], [11,3,6]
+		 	]
+		 ), "Cat Behind Garbage Can");
+		addProblemOption(new Problem( // Eight Ball
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[8], [6,3], [9,2], [11,2], [13,2],
+		 		[7,4,1], [6,3,2], [5,3,2,1], [4,2,2,2,1], [4,1,1,2,1],
+		 		[3,2,2,2,1], [3,3,2,1], [3,2,2,4], [4,1,1,5], [3,2,2,4],
+		 		[4,3,5], [4,5], [5,6], [12], [8]
+		 	],
+		 	// Columns
+		 	[
+		 		[8], [12], [14], [8,5], [7,4],
+		 		[6,3], [6,3], [6,3,3,3], [5,2,3,2,2], [5,1,1,1,2],
+		 		[1,3,2,3,2,2], [1,4,3,3,3], [1,3,3], [2,3,4], [1,3,4],
+		 		[2,4,6], [2,10], [2,7], [3,4], [8]
+		 	]
+		 ), "Eight Ball");
+		addProblemOption(new Problem( // Camel
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[1], [2], [6], [2,3,3,2], [4,3,6],
+		 		[3,4,4], [3,3,1,4], [16], [16], [15],
+		 		[14], [13], [2,2,2,2], [2,2,2,2], [2,2,2,3],
+		 		[2,2,2,2], [2,2,2,2], [2,2,2,2], [2,2,2,3], [2,2,2,2]
+		 	],
+		 	// Columns
+		 	[
+		 		[11], [14], [7,1], [8,6], [3,13],
+		 		[2,7,1], [1,6], [1,7], [3,12], [3,13],
+		 		[2,5,1], [9], [10], [3,5,5], [9,3],
+		 		[7,2], [6], [1,2], [3], [2]
+		 	]
+		 ), "Camel");
+		addProblemOption(new Problem( // Girl Face
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[10], [13,2,1], [11,1,4], [13,6], [20],
+		 		[7,7], [6,4], [6,3,2], [6,1,1,1], [6,2,3,1],
+		 		[6,1,1,1], [6,2,2], [3,1], [2,2,1], [2,4,1],
+		 		[2,2,2], [1,2], [5,2], [3,4], [9]
+		 	],
+		 	// Columns
+		 	[
+		 		[1,9], [12], [13], [14,1], [11,2,1],
+		 		[12,1,2], [6,3], [5,3], [5,1], [5,3,1,1],
+		 		[5,1,1,3,2], [5,2,3,3], [2,2,1,3], [1,1,2,1,2], [2,3,3,1,1],
+		 		[6,1,1,1], [5,2,2], [6,3], [11], [3]
+		 	]
+		 ), "Girl Face");
+		addProblemOption(new Problem( // Whale
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[2,1], [2,1], [2,2,2,2], [3,1,1,3], [2,1,3],
+		 		[2,2], [1], [5,2], [7,3], [9,3],
+		 		[11,3], [12,4], [3,14,1], [18], [17],
+		 		[16], [13,3], [8,3,2], [3,3], [4,1]
+		 	],
+		 	// Columns
+		 	[
+		 		[4,1], [1,6,1], [2,8,1], [1,1,3,5,1], [2,2,10],
+		 		[2,2,12], [2,1,12], [1,13], [2,1,11], [3,2,11],
+		 		[1,9], [2,8], [1,8], [2,6], [1,4,2],
+		 		[1,4,2], [2,4,2], [6,2], [4,1], [4,1]
+		 	]
+		 ), "Whale");
+		addProblemOption(new Problem( // Heart Black & White
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[10], [10], [4,4,2], [3,3,4], [2,2,2,2,2],
+		 		[1,4,1,2,2], [6,2,2], [7,1,2], [7,3], [1,6,3],
+		 		[3,5,2], [3,4,3], [3,3,4], [3,2,5], [3,1,6],
+		 		[3,7], [2,8], [1,9], [10], [10]
+		 	],
+		 	// Columns
+		 	[
+		 		[6,1], [5], [4,2,1], [3,4,2], [2,9],
+		 		[2,6,3], [3,5,3], [4,4,3], [5,3,3], [6,2,3],
+		 		[2,5,2], [2,4,3], [2,3,4], [2,2,5], [2,1,6],
+		 		[2,7], [2,1,8], [2,2,9], [15], [3,10]
+		 	]
+		 ), "Heart Black & White");
+		addProblemOption(new Problem( // Hummer and Nail
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[3], [2,2], [2,2,2], [5,1,2], [5,1,1],
+		 		[5,5,2], [4,1,1,2], [2,5,2], [2,1,1,2], [2,5,4],
+		 		[2,1,1,6], [1,5,8], [2,1,10], [2,1,2,8], [2,2,8],
+		 		[3,8], [3,7], [1,6], [1,5], [8,4]
+		 	],
+		 	// Columns
+		 	[
+		 		[3,1,1], [2,2,4], [2,2,1,2,1,1], [5,1,2,1], [5,5,1,1],
+		 		[5,1,1,2,1], [4,5,2,1], [2,1,1,2,1], [2,5,2], [2,1,1,3],
+		 		[2,5,5], [1,1,7], [2,1,9], [2,2,8], [2,2,8],
+		 		[3,8], [8], [7], [6], [5]
+		 	]
+		 ),"Hummer and Nail");
+		addProblemOption(new Problem( // Two Women Faces
+		 	30, 25,
+		 	// Rows
+		 	[
+		 		[7,17], [14,9], [6,5,7], [4,4,5], [3,3,4],
+		 		[2,2,4], [2,1,3,4], [1,2,2,4], [1,2,2,3], [2,1,3,1,3],
+		 		[3,3,6,3], [2,4,5,3], [1,1,3,2,3], [4,1,4,3], [1,3,2,3,2],
+		 		[2,2,1], [2,2], [2,1,2], [1,1,1], [2,4],
+		 		[1,3,4,1], [4,8,1], [7,2], [2,7,8,2], [2,1,3,11],
+		 		[3,3,12], [4,12], [5,13], [3,2,3,11], [3,6,11]
+		 	],
+		 	// Columns
+		 	[
+		 		[10,3,7], [7,2,1,7], [5,1,2,5], [4,2,2,2], [3,1,1,1,2],
+		 		[3,2,2], [2,1,1,1,1], [2,1,3,1], [5,6,2,3,1], [6,1,8,2,1],
+		 		[9,2,3,1,2], [4,5,1,1], [2,5,2], [2,5,3], [1,2,8,8],
+		 		[1,4,11], [2,5,11], [2,2,2,12], [3,1,2,1,10], [3,1,4,1,9],
+		 		[4,1,9], [8,1,7], [14,1,6], [15,8], [16,10]
+		 	]
+		 ), "Two Women Faces");
+		addProblemOption(new Problem( // Grapes
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[3,2], [5,2,1], [5,6], [11,2], [6,4,3],
+		 		[1,2,3,1,6], [8,1,2,2], [9,2,2,2], [3,1,2,1,1,2,2], [2,2,4,4],
+		 		[10,3], [2,1,2,3,2], [10,1], [1,2,4,1], [6,4],
+		 		[2,6], [6], [5], [1,1], [2]
+		 	],
+		 	// Columns
+		 	[
+		 		[2,3], [3,5], [4,3], [8], [9,2,3],
+		 		[2,2,2,4,2], [6,2,3,1], [8,8], [4,4,1,1,4], [1,3,10],
+		 		[4,7,3,1], [1,1,2,2,8], [1,1,8], [1,1,3,1], [1,2,4],
+		 		[6], [2,4], [3,3], [8], [2]
+		 	]
+		 ), "Grapes");
+		addProblemOption(new Problem( // Cup of Coffee
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[1,1,1,1,1], [1,1,1,1,1], [1,1,1,1,1], [1,1,1,1,1], [13],
+		 		[1,1], [16], [14,1], [14,1], [14,1],
+		 		[14,1], [14,1], [16], [14], [16],
+		 		[1,14,1], [1,14,1], [20], [1,1], [18]
+		 	],
+		 	// Columns
+		 	[
+		 		[3], [1,1,1], [1,1,1], [1,1,13,1], [1,2,12,1],
+		 		[1,12,1], [1,2,12,1], [1,1,1,12,1], [1,12,1], [1,2,12,1],
+		 		[1,1,1,12,1], [1,12,1], [1,2,12,1], [1,1,1,12,1], [1,12,1],
+		 		[1,2,12,1], [1,1,14,1], [1,1,1,1,1], [1,1,1,1,1], [5,3]
+		 	]
+		 ), "Cup of Coffee");
+		addProblemOption(new Problem( // Wooden Horse
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[1,1], [1,5], [1,3,2], [3,7], [2,8],
+		 		[4,11,3], [4,3,2], [2,2], [3,4], [4,5],
+		 		[10], [8], [2,7,2], [3,3,3,4], [3,2,2,4],
+		 		[5,5,1], [5,5], [11], [9], [5]
+		 	],
+		 	// Columns
+		 	[
+		 		[1,1,3], [5,3], [4,3], [2,2], [4,3],
+		 		[6,6], [1,11], [1,5,4], [1,3,3], [1,3,3],
+		 		[1,4,3], [1,6,4], [15], [9,6], [7,3,3],
+		 		[5,2], [5,3], [1,3,3], [6,4], [5,2]
+		 	]
+		 ), "Wooden Horse");
+		addProblemOption(new Problem( // Panda
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[2,2], [4,8,4], [7,7], [5,4], [3,1],
+		 		[1,3,3,1], [1,5,5,1], [1,1,3,1,3,1], [1,1,7,2,1], [1,3,4,1],
+		 		[1,2,5,2,1], [1,1,5,1,1], [1,2,3,1,1], [1,1,1,1,1,1], [1,1,6,1,1],
+		 		[1,2,1,1], [1,2,1,1], [1,11,1], [2,2], [16]
+		 	],
+		 	// Columns
+		 	[
+		 		[4,11], [7,1], [5,4,2], [3,7,2,1], [2,2,2,2,1],
+		 		[1,3,1,1,1], [2,4,1,1,1], [1,3,2,1,1,1], [1,1,3,1,1,1], [1,1,5,1,1],
+		 		[1,1,3,1,1,1], [1,1,2,2,1,1], [1,3,1,1], [2,2,1,1,1], [1,3,2,1,1],
+		 		[1,7,1,1], [3,4,1,1], [4,2], [5,2], [3,12]
+		 	]
+		 ), "Panda");
+		addProblemOption(new Problem( // Flower Vaze
+		 	20, 20,
+		 	// Rows
+		 	[
+		 		[3], [1,1,4,4], [4,2,1,1,1], [1,1,2,1,2,1,2,1], [1,2,1,1,2,1,2,1],
+		 		[1,2,5,1,1], [1,1,4,4], [2,4,1], [9], [9],
+		 		[13], [15], [15], [15], [2,3,2],
+		 		[2,2,2,2], [15], [15], [13], [10]
+		 	],
+		 	// Columns
+		 	[
+		 		[3], [1,1], [1,2,1], [1,2,1,3,3], [3,1,4,4],
+		 		[1,2,1,5,3], [1,2,1,8,4], [1,2,1,7,5], [1,1,7,5], [4,7,4],
+		 		[1,1,7,4], [1,2,1,7,4], [1,2,1,6,5], [1,1,6,5], [4,8,4],
+		 		[1,1,5,4], [1,2,1,4,4], [1,2,1,3,3], [1,1], [4]
+		 	]
+		 ), "Flower Vaze");
+		// var p = new Problem(
+		//  	15, 15,
+		//  	// Rows
+		//  	[
+		//  		[3], [1,1,4], [4,2,1,1], [1,1,2,1,2,1], [1,2,1,1,2,1],
+		//  		[1,2,5,1], [1,1,4], [2,4,1], [9], [9],
+		//  		[11], [12], [12], [12], [2,3,1]
+		//  	],
+		//  	// Columns
+		//  	[
+		//  		[3], [1,1], [1,2,1], [1,2,1,3], [3,1,4],
+		//  		[1,2,1,5], [1,2,1,8], [1,2,1,7], [1,1,7], [4,7],
+		//  		[1,1,7], [1,2,1,7], [1,2,1,6], [1,1,6], [4,8]
+		//  	]
+		//  );
+		// var p = new Problem(
+		//  	10, 10,
+		//  	// Rows
+		//  	[
+		//  		[3], [1,1], [4,2,1], [1,1,2,1], [1,2,1,1],
+		//  		[1,2,5], [1,1], [2,4], [4], [4]
+		//  	],
+		//  	// Columns
+		//  	[
+		//  		[3], [1,1], [1,2,1], [1,2,1], [3,1],
+		//  		[1,2,1], [1,2,1,3], [1,2,1,3], [1,1,3], [4,2]
+		//  	]
+		//  );
+		// var p = new Problem(
+		//  	5, 5,
+		//  	// Rows
+		//  	[
+		//  		[], [1], [4], [1,1], [1,2]
+		//  	],
+		//  	// Columns
+		//  	[
+		//  		[2], [1], [1,1], [1,1], [3]
+		//  	]
+		//  );
+		// var p = new Problem(3, 3, [[1,1],[1],[1,1]], [[1,1],[1],[1,1]]);
+		var p = problems[0];
+
+		fldProblem.onchange = function() {
+			p = problems[fldProblem.selectedIndex];
+			init();
+		}
+
+		function addProblemOption(problem, title) {
+			var option = document.createElement("option");
+			option.value = fldProblem.size;
+			option.text = title;
+			fldProblem.add(option);
+			problems.push(problem);
+		}
+
+		function solve() {
+			return solver.solve(p,
+				{
+					onProgress : function(index, count) {
+									var progress = ((((index/count)*100-50)/50)*100).toFixed(2);
+									if (progress - prevProgress >= interval) {
+										prevProgress = progress;
+										console.log(index + " / " + count + " = " + progress + "%");
+									}
+								}
+				} );
+		}
+
+		function iterativeSolution() {
+			setTimeout(function() {
+				updateGridViewer(solution.grid);
+				if (solution.next()) iterativeSolution();
+			}, animationDelay);
+		}
+
+		function init() {
+			updateGridViewer(new Grid(p.getRowCount(), p.getColumnCount()));
+			solution = solve();
+		}
+
+		function updateGridViewer(grid) {
+			viewer.setCellSize(cellSize);
+			viewer.printProblemState(divMain, p, grid);
+		}
+
+		init();
+	</script>
+</html>
