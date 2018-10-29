@@ -1,7 +1,8 @@
 # GriddlerSolverJS
 
 A griddler puzzle solver written in JavaScript.  
-This was done as a side project with no real purpose... It was just pure fun.
+This was done as a side project with no real purpose... It was just pure fun.  
+This project is also referenced from a post in my blog [Orange-Coding](http://orange-coding.blogspot.com): [Griddlers Solver](http://orange-coding.blogspot.com/2014/05/griddlers-solver.html)
 
 To play, go the [Griddler Solver](https://yinonavraham.github.io/GriddlerSolverJS/griddlers.html) page.
 
